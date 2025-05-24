@@ -169,7 +169,7 @@ from pyspark.sql.types import IntegerType
 # 1. Crear la sesión de Spark
 spark = SparkSession.builder.appName("FusionParquets").getOrCreate()
 
-bucket = "qwiklabs-gcp-02-e51808870bcb"
+bucket = "<TU_BUCKET>"
 base_path = f"gs://{bucket}-taxis-data/taxis/"
 
 # 2. Generar rutas
