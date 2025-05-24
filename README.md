@@ -85,17 +85,6 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member=serviceAccount:datap
 gsutil iam ch serviceAccount:cf-streaming-sa@$PROJECT_ID.iam.gserviceaccount.com:objectCreator gs://$PROJECT_ID-taxis-data
 ```
 
-> [!IMPORTANT] 
-> Dar permisos a nuestro usuario de la consola
-> Este comando necesito que reemplaces \<USUARIO CONSOLA> por el usuario que te sale en la consola antes del "@"
-> Por ejemplo **student_01_e5e6025302cf**@cloudshell
-
-```bash
-gsutil iam ch \
-  user:<USUARIO CONSOLA>@qwiklabs.net:objectViewer \
-  gs://$PROJECT_ID-taxis-data
-```
-
 ---
 
 # Creamos el Script para descargar los parquets
@@ -237,16 +226,29 @@ gcloud dataproc clusters delete taxi-clean-cluster --region=$REGION --quiet
 # Tratamiento de la data
 
 1. Subimos nuestra data "sucia" a bigquery
+  1. Publicamos la data momentaniamente para evitar confusion con los permisos
+  ```bash
+  gsutil iam ch allUsers:objectViewer gs://$PROJECT_ID-taxis-data
+  ```
+  Volvemos a hacer privada la data
+  ```bash
+  gsutil iam ch -d allUsers gs://$PROJECT_ID-taxis-data
+  ```
+  > [!IMPORTANT] 
+  > Esto solo se hace al ser un ejercicio de practica **NO ES APLICABLE A LA VIDA REAL**
 
-```bash
-bq load \
-  --source_format=PARQUET \
-  --autodetect \
-  --replace \
-  --project_id=$PROJECT_ID \
-  taxi.yellow_tripdata_2022_2024 \
-  "gs://$PROJECT_ID-taxis-data/taxis/final_data/*.parquet"
-```
+
+  2. Subimos la data a **BigQuey**
+
+  ```bash
+  bq load \
+    --source_format=PARQUET \
+    --autodetect \
+    --replace \
+    --project_id=$PROJECT_ID \
+    taxi.yellow_tripdata_2022_2024 \
+    "gs://$PROJECT_ID-taxis-data/taxis/final_data/*.parquet"
+  ```
 
 2. Limpiamos la data siguiendo el siguiente proceso:
     1. Eliminamos las siguientes columnas ya que no aportan informacion vital para los **ETL'S**.
@@ -266,7 +268,62 @@ bq load \
 
 # Mostramos los KPI's en looker studio
 
-- Pregunta 1:
+- Pregunta 1 (Cantidad de viajes por mes):
 ```query
-select * from;
+SELECT
+  EXTRACT(YEAR FROM year) AS anio,
+  month,
+  COUNT(*) AS total_viajes
+FROM
+  `qwiklabs-gcp-02-4b407eea4480.taxi.taxis_etl`
+GROUP BY anio, month
+ORDER BY anio, month;
+```
+
+- Pregunta 2 (Duración promedio del viaje (en minutos))
+```query
+SELECT
+  AVG(TIMESTAMP_DIFF(tpep_dropoff_datetime, tpep_pickup_datetime, MINUTE)) AS duracion_promedio_min
+FROM
+  `qwiklabs-gcp-02-4b407eea4480.taxi.taxis_etl`
+WHERE
+  tpep_dropoff_datetime IS NOT NULL
+  AND tpep_pickup_datetime IS NOT NULL
+```
+
+- Pregunta 3 (Promedio de distancia recorrida por viaje (en millas))
+```query
+SELECT
+  AVG(trip_distance) AS distancia_promedio_millas
+FROM
+  `qwiklabs-gcp-02-4b407eea4480.taxi.taxis_etl`
+WHERE
+  trip_distance IS NOT NULL
+```
+
+- Pregunta 4 (Zonas con mayor número de viajes (Top 5 por pickup))
+```query
+SELECT
+  PULocationID
+  COUNT(*) AS total_viajes
+FROM
+  `qwiklabs-gcp-02-4b407eea4480.taxi.taxis_etl`
+GROUP BY PULocationID
+ORDER BY total_viajes DESC
+LIMIT 5;
+```
+
+- Pregunta 5 (Porcentaje de viajes con pago en efectivo vs tarjeta)
+```query
+SELECT
+  CASE
+    WHEN payment_type = 1 THEN 'Tarjeta'
+    WHEN payment_type = 2 THEN 'Efectivo'
+    ELSE 'Otro'
+  END AS medio_pago,
+  COUNT(*) AS cantidad,
+  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS porcentaje
+FROM
+  `qwiklabs-gcp-02-4b407eea4480.taxi.taxis_etl`
+GROUP BY medio_pago;
 ```
