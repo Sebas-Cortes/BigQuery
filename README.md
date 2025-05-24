@@ -156,9 +156,7 @@ gcloud dataproc clusters create taxi-clean-cluster \
 
 3. Creamos nuestro script en **python** para limpiar la data:
 
-```bash
-gsutil cp clean_taxi.py gs://$PROJECT_ID-code/spark/
-```
+Subimos manualmente el codigo al bucket llamado PROJECTID-code.
 
 4. Creamos el data set en bigquery
 
@@ -190,71 +188,39 @@ bq --location=US mk taxi
 > \<TU_BUCKET>
 
 ```python
-#!/usr/bin/env python
-# clean_taxi.py  v2  (salida BigQuery)
-
+# File: parquet_to_csv.py  ─────────────────────────────────────────
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import (
-    input_file_name, regexp_extract, col, avg
-)
 
-# ───────── CONFIGURA ESTOS TRES VALORES ─────────
-BUCKET      = "<TU_BUCKET>"          # ej: qwiklabs-gcp-6614d8b67483-data
-BQ_DATASET  = "taxi"                      # crea con: bq mk taxi
-BQ_TABLE    = "taxis_ny_final"             # nombre de tabla final
-# ────────────────────────────────────────────────
+INPUT  = "gs://qwiklabs-gcp-03-4163a038ba49-taxis-data/taxis/*/*/*.parquet"
+OUTPUT = "gs://qwiklabs-gcp-03-4163a038ba49-taxis-csv/"   # <- cambia a tu gusto
 
-PATH_IN   = f"gs://{BUCKET}-taxis-data/taxis/*/*/*.parquet"
-TEMP_GCS  = f"gs://{BUCKET}-bqtemp"       # bucket temporal para el conector
+spark = SparkSession.builder.getOrCreate()
 
-spark = (
-    SparkSession.builder
-    .appName("taxi-cleaning")
-    .getOrCreate()
-)
+# ── 1. leemos TODO como string para saltarnos los líos de tipos ──
+df = spark.read.option("mergeSchema", "true").parquet(INPUT)
 
-# 1. Lectura
-df = spark.read.parquet(PATH_IN)
+# ── 2. (opcional) casteamos columnas que sí conocemos ────────────
+from pyspark.sql.functions import col
+int_cols = ["VendorID","RatecodeID","PULocationID",
+            "DOLocationID","payment_type"]
+for c in int_cols:
+    if c in df.columns:
+        df = df.withColumn(c, col(c).cast("int"))
 
-# 2. Añade Year / Month
-df = (
-    df.withColumn("_filename", input_file_name())
-      .withColumn("Year",  regexp_extract("_filename", r"/(\d{4})/", 1).cast("int"))
-      .withColumn("Month", regexp_extract("_filename", r"/\d{4}/(\d{2})/", 1).cast("int"))
-      .drop("_filename")
-)
-
-# 3. Elimina columnas poco útiles
-df = df.drop("store_and_fwd_flag", "PULocationID", "DOLocationID")
-
-# 4. Rellena nulos
-df = df.fillna({"RatecodeID": 99})
-num_cols = [c for (c, t) in df.dtypes if t in ("double", "int", "bigint", "float", "long") and c != "RatecodeID"]
-means = df.select([avg(c).alias(c) for c in num_cols]).first().asDict()
-df = df.fillna(means)
-
-# 5. Escribe en BigQuery
-(
-  df.write.format("bigquery")
-    .option("table",           f"{BQ_DATASET}.{BQ_TABLE}")
-    .option("temporaryGcsBucket", TEMP_GCS)
-    .option("writeMethod",     "direct")      # requiere el conector ≥ 0.31
-    .mode("overwrite")
-    .save()
-)
-
-print("✔ Datos limpios cargados en BigQuery:", f"{BQ_DATASET}.{BQ_TABLE}")
-spark.stop()
+# ── 3. escribimos CSV con header y sin particionar ───────────────
+(df.coalesce(1)                                # un solo CSV por carpeta (opcional)
+   .write
+   .mode("overwrite")
+   .option("header", "true")
+   .csv(OUTPUT))
 ```
 
 7. Ejecutamos nuestro script de PySpark con **DataProc**
 
 ```bash
 gcloud dataproc jobs submit pyspark \
-  gs://$PROJECT_ID-code/spark/clean_taxi.py \
-  --cluster=taxi-clean-cluster \
-  --region=$REGION \
-  --jars=gs://spark-lib/bigquery/spark-bigquery-latest.jar
+  gs://$PROJECT_ID-code/parquet_to_csv.py \
+  --cluster=taxi-clean-cluster --region=$REGION
 ```
 
 8. Cuando termine de pasar toda la informacion detemos el Cluster
