@@ -96,7 +96,6 @@ gsutil iam ch \
   gs://$PROJECT_ID-taxis-data
 ```
 
-
 ---
 
 # Creamos el Script para descargar los parquets
@@ -152,6 +151,9 @@ gcloud dataproc clusters create taxi-clean-cluster \
   --properties=spark:spark.sql.adaptive.enabled=true \
   --max-idle=10m
 ```
+
+> [!INFO]  
+> Si este comando falla borra el cluster de dataproc y intenta nuevamente
 
 3. Creamos nuestro script en **python** para fusionar la data:
 
