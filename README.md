@@ -188,38 +188,53 @@ bq --location=US mk taxi
 > \<TU_BUCKET>
 
 ```python
-# File: parquet_to_csv.py  ─────────────────────────────────────────
 from pyspark.sql import SparkSession
-
-INPUT  = "gs://qwiklabs-gcp-03-4163a038ba49-taxis-data/taxis/*/*/*.parquet"
-OUTPUT = "gs://qwiklabs-gcp-03-4163a038ba49-taxis-csv/"   # <- cambia a tu gusto
-
-spark = SparkSession.builder.getOrCreate()
-
-# ── 1. leemos TODO como string para saltarnos los líos de tipos ──
-df = spark.read.option("mergeSchema", "true").parquet(INPUT)
-
-# ── 2. (opcional) casteamos columnas que sí conocemos ────────────
 from pyspark.sql.functions import col
-int_cols = ["VendorID","RatecodeID","PULocationID",
-            "DOLocationID","payment_type"]
-for c in int_cols:
-    if c in df.columns:
-        df = df.withColumn(c, col(c).cast("int"))
+from pyspark.sql.types import IntegerType
 
-# ── 3. escribimos CSV con header y sin particionar ───────────────
-(df.coalesce(1)                                # un solo CSV por carpeta (opcional)
-   .write
-   .mode("overwrite")
-   .option("header", "true")
-   .csv(OUTPUT))
+# 1. Crear la sesión de Spark
+spark = SparkSession.builder.appName("FusionParquets").getOrCreate()
+
+bucket = ""
+# 2. Lista de rutas de todos los archivos
+base_path = f"gs://{bucket}-taxis-data/taxis/"
+years = [2022, 2023, 2024]
+months = [f"{m:02d}" for m in range(1, 13)]
+files = [
+    f"{base_path}{year}/{month}/yellow_tripdata_{year}-{month}.parquet"
+    for year in years
+    for month in months
+]
+
+# 3. Leer y normalizar cada archivo
+dataframes = []
+for file in files:
+    try:
+        df = spark.read.parquet(file)
+
+        # Convertir columnas conflictivas a un mismo tipo
+        if "VendorID" in df.columns:
+            df = df.withColumn("VendorID", col("VendorID").cast(IntegerType()))
+        # Aquí puedes agregar más columnas si otras también tienen dtypes diferentes
+
+        dataframes.append(df)
+    except Exception as e:
+        print(f"Error leyendo {file}: {e}")
+
+# 4. Unir todos los DataFrames
+df_final = dataframes[0]
+for df in dataframes[1:]:
+    df_final = df_final.unionByName(df, allowMissingColumns=True)
+
+# 5. Guardar el resultado como un único Parquet
+df_final.write.mode("overwrite").parquet("gs://bucket-taxis-data/taxis/final_data/yellow_tripdata_2022-2024.parquet")
 ```
 
 7. Ejecutamos nuestro script de PySpark con **DataProc**
 
 ```bash
 gcloud dataproc jobs submit pyspark \
-  gs://$PROJECT_ID-code/parquet_to_csv.py \
+  gs://$PROJECT_ID-code/fusion_parquet.py \
   --cluster=taxi-clean-cluster --region=$REGION
 ```
 
