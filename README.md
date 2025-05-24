@@ -152,7 +152,7 @@ gcloud dataproc clusters create taxi-clean-cluster \
   --max-idle=10m
 ```
 
-> [!INFO]  
+> [!TIP]  
 > Si este comando falla borra el cluster de dataproc y intenta nuevamente
 
 3. Creamos nuestro script en **python** para fusionar la data:
