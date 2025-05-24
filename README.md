@@ -9,14 +9,8 @@ El proyecto completo será desarrollado en **Google Cloud Plataform (GCP)** sigu
 
 1. Definimos la region y el ID del proyecto:
 
-```bash
-gcloud projects list
-gcloud config set project YOUR_REAL_PROJECT_ID
-```
-Copiamos el proyect id por ejemplo:
-```bash
-gcloud config set project qwiklabs-gcp-00-6614d8b67483
-```
+Abrimos la consola en el projecto que no es resource  
+y ejecutamos lo siguiente:
 
 ```bash
 PROJECT_ID=$(gcloud config get-value project)
@@ -57,13 +51,6 @@ gcloud iam service-accounts create dataproc-sa --display-name "Dataproc Cluster 
 gsutil mb -p $PROJECT_ID -l $REGION gs://$PROJECT_ID-taxis-data
 ```
 
-2. Creamos un bucket temporal para pasar la tabla final a BigQuery
-
-```bash
-gsutil mb -l $REGION gs://$PROJECT_ID-bqtemp
-gsutil iam ch serviceAccount:dataproc-sa@$PROJECT_ID.iam.gserviceaccount.com:objectAdmin gs://$PROJECT_ID-bqtemp
-```
-
 3. Creamos el bucket para el codigo del data proc:
 
 ```bash
@@ -98,6 +85,18 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member=serviceAccount:datap
 gsutil iam ch serviceAccount:cf-streaming-sa@$PROJECT_ID.iam.gserviceaccount.com:objectCreator gs://$PROJECT_ID-taxis-data
 ```
 
+> [!IMPORTANT] 
+> Dar permisos a nuestro usuario de la consola
+> Este comando necesito que reemplaces \<USUARIO CONSOLA> por el usuario que te sale en la consola antes del "@"
+> Por ejemplo **student_01_e5e6025302cf**@cloudshell
+
+```bash
+gsutil iam ch \
+  user:<USUARIO CONSOLA>@qwiklabs.net:objectViewer \
+  gs://$PROJECT_ID-taxis-data
+```
+
+
 ---
 
 # Creamos el Script para descargar los parquets
@@ -131,7 +130,7 @@ done
 
 ---
 
-# Utilizamos DataProc para limpiar la data con los parquets en el bucket
+# Utilizamos DataProc para fusionar los parquets en el bucket
 
 1. Damos los permisos faltantes a nuestro usuario:
 
@@ -141,7 +140,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --role="roles/dataproc.worker"
 ```
 
-2. Creamos nuestro cluster de **DataProc** para limpiar la data
+2. Creamos nuestro cluster de **DataProc** para fusionar la data
 
 ```bash
 gcloud dataproc clusters create taxi-clean-cluster \
@@ -154,7 +153,7 @@ gcloud dataproc clusters create taxi-clean-cluster \
   --max-idle=10m
 ```
 
-3. Creamos nuestro script en **python** para limpiar la data:
+3. Creamos nuestro script en **python** para fusionar la data:
 
 Subimos manualmente el codigo al bucket llamado PROJECTID-code.
 
@@ -164,7 +163,90 @@ Subimos manualmente el codigo al bucket llamado PROJECTID-code.
 bq --location=US mk taxi
 ```
 
-5. Limpiamos la data siguiendo el siguiente proceso:
+5. Script para el proceso de limpieza y carga a bigquery:
+Este script ademas de fusionar la data añade 2 columnas nuevas que son **Mes** y **Año** (year y month)
+
+> [!WARNING]  
+> Este script necesita que se ingresen manualmente datos como  
+> \<TU_BUCKET>
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, lit
+from pyspark.sql.types import IntegerType
+
+# 1. Crear la sesión de Spark
+spark = SparkSession.builder.appName("FusionParquets").getOrCreate()
+
+bucket = "qwiklabs-gcp-02-e51808870bcb"
+base_path = f"gs://{bucket}-taxis-data/taxis/"
+
+# 2. Generar rutas
+years = [2022, 2023, 2024]
+months = [f"{m:02d}" for m in range(1, 13)]
+files = [
+    (f"{base_path}{year}/{month}/yellow_tripdata_{year}-{month}.parquet", year, int(month))
+    for year in years
+    for month in months
+]
+
+# 3. Leer, normalizar y agregar columnas de año/mes
+dataframes = []
+for file_path, year, month in files:
+    try:
+        df = spark.read.parquet(file_path)
+
+        # Normalización de columnas
+        if "VendorID" in df.columns:
+            df = df.withColumn("VendorID", col("VendorID").cast(IntegerType()))
+
+        # Agregar columnas year y month
+        df = df.withColumn("year", lit(year))
+        df = df.withColumn("month", lit(month))
+
+        dataframes.append(df)
+    except Exception as e:
+        print(f"Error leyendo {file_path}: {e}")
+
+# 4. Unión de todos los DataFrames
+df_final = dataframes[0]
+for df in dataframes[1:]:
+    df_final = df_final.unionByName(df, allowMissingColumns=True)
+
+# 5. Guardar como Parquet
+df_final.write.mode("overwrite").parquet(f"gs://{bucket}-taxis-data/taxis/final_data/yellow_tripdata_2022-2024.parquet")
+```
+
+6. Ejecutamos nuestro script de PySpark con **DataProc**
+
+```bash
+gcloud dataproc jobs submit pyspark \
+  gs://$PROJECT_ID-code/fusion_parquet.py \
+  --cluster=taxi-clean-cluster --region=$REGION
+```
+
+7. Cuando termine de pasar toda la informacion detemos el Cluster
+
+```bash
+gcloud dataproc clusters delete taxi-clean-cluster --region=$REGION --quiet
+```
+
+---
+# Tratamiento de la data
+
+1. Subimos nuestra data "sucia" a bigquery
+
+```bash
+bq load \
+  --source_format=PARQUET \
+  --autodetect \
+  --replace \
+  --project_id=$PROJECT_ID \
+  taxi.yellow_tripdata_2022_2024 \
+  "gs://$PROJECT_ID-taxis-data/taxis/final_data/*.parquet"
+```
+
+2. Limpiamos la data siguiendo el siguiente proceso:
     1. Eliminamos las siguientes columnas ya que no aportan informacion vital para los **ETL'S**.
         1. **store_and_fwd_flag**  
         (Indica si el registro fue almacenado en la memoria del vehículo antes de enviarse al proveedor)
@@ -175,71 +257,14 @@ bq --location=US mk taxi
     2. Reemplazamos los **nulos**.
         1. En la columna **RatecodeID** los reemplazamos por 99.
         2. En el resto de columnas reemplazamos por la **media**.
-    3. Fusionamos los **parquets** en una unica tabla con 2 columnas nuevas:
-        1. **Year**  
-        (Año)
-        2. **Month**  
-        (Mes)
+      
+3. Ejecutamos el proceso anterior en Alteryx (dataprep) y lo dejamos en un una nueva tabla llamada taxis_limpia.
 
-6. Script para el proceso de limpieza y carga a bigquery:  
+---
 
-> [!WARNING]  
-> Este script necesita que se ingresen manualmente datos como  
-> \<TU_BUCKET>
+# Mostramos los KPI's en looker studio
 
-```python
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
-from pyspark.sql.types import IntegerType
-
-# 1. Crear la sesión de Spark
-spark = SparkSession.builder.appName("FusionParquets").getOrCreate()
-
-bucket = ""
-# 2. Lista de rutas de todos los archivos
-base_path = f"gs://{bucket}-taxis-data/taxis/"
-years = [2022, 2023, 2024]
-months = [f"{m:02d}" for m in range(1, 13)]
-files = [
-    f"{base_path}{year}/{month}/yellow_tripdata_{year}-{month}.parquet"
-    for year in years
-    for month in months
-]
-
-# 3. Leer y normalizar cada archivo
-dataframes = []
-for file in files:
-    try:
-        df = spark.read.parquet(file)
-
-        # Convertir columnas conflictivas a un mismo tipo
-        if "VendorID" in df.columns:
-            df = df.withColumn("VendorID", col("VendorID").cast(IntegerType()))
-        # Aquí puedes agregar más columnas si otras también tienen dtypes diferentes
-
-        dataframes.append(df)
-    except Exception as e:
-        print(f"Error leyendo {file}: {e}")
-
-# 4. Unir todos los DataFrames
-df_final = dataframes[0]
-for df in dataframes[1:]:
-    df_final = df_final.unionByName(df, allowMissingColumns=True)
-
-# 5. Guardar el resultado como un único Parquet
-df_final.write.mode("overwrite").parquet("gs://bucket-taxis-data/taxis/final_data/yellow_tripdata_2022-2024.parquet")
-```
-
-7. Ejecutamos nuestro script de PySpark con **DataProc**
-
-```bash
-gcloud dataproc jobs submit pyspark \
-  gs://$PROJECT_ID-code/fusion_parquet.py \
-  --cluster=taxi-clean-cluster --region=$REGION
-```
-
-8. Cuando termine de pasar toda la informacion detemos el Cluster
-
-```bash
-gcloud dataproc clusters delete taxi-clean-cluster --region=$REGION --quiet
+- Pregunta 1:
+```query
+select * from;
 ```
