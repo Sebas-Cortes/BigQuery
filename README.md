@@ -251,13 +251,13 @@ gcloud dataproc clusters delete taxi-clean-cluster --region=$REGION --quiet
   ```
 
 2. Limpiamos la data siguiendo el siguiente proceso:
-    1. Eliminamos las siguientes columnas ya que no aportan informacion vital para los **ETL'S**.
-        1. **store_and_fwd_flag**  
-        (Indica si el registro fue almacenado en la memoria del vehículo antes de enviarse al proveedor)
-        2. **PULocationID**  
-        (Zona TLC donde se activó el taxímetro.)
-        3. **DOLocationID**  
-        (Zona TLC donde se desactivó el taxímetro.)
+    1. Eliminamos todas las columnas menos las siguietes ya que no aportan informacion vital para los **ETL'S**.
+        - tpep_pickup_datetime (Hora de inicio de viaje)
+        - tpep_dropoff_datetime (Hora de termino de viaje)
+        - trip_distance (Distancia del viaje en millas)
+        - PULocationID (Zona de inicio del viaje)
+        - year (Año)
+        - month (Mes)
     2. Reemplazamos los **nulos**.
         1. En la columna **RatecodeID** los reemplazamos por 99.
         2. En el resto de columnas reemplazamos por la **media**.
