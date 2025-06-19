@@ -32,30 +32,38 @@ nano main.py
 import json
 from google.cloud import pubsub_v1
 
-# Reemplaza esto por tu ID real de proyecto
-PROJECT_ID = "tu-id-de-proyecto"
+PROJECT_ID = "qwiklabs-gcp-01-a661d525d46b"
 TOPIC_ID = "topic-stream"
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
+
+columnas_obligatorias = [
+    "id_cliente", "cliente", "genero", "id_producto", "producto",
+    "precio", "cantidad", "monto", "forma_pago", "fecreg"
+]
 
 def recibir_datos(request):
     if request.method != 'POST':
         return ("Método no permitido", 405)
 
     try:
-        datos = request.get_json()
-        if datos is None:
-            return ("No se recibieron datos JSON", 400)
+        data = request.get_json()
+        if data is None:
+            return ("No se recibió JSON válido", 400)
 
-        mensaje = json.dumps(datos).encode("utf-8")
+        # Validar y completar con None si falta alguna columna
+        datos_limpios = {col: data.get(col, None) for col in columnas_obligatorias}
+
+        # Publicar en Pub/Sub
+        mensaje = json.dumps(datos_limpios).encode("utf-8")
         publisher.publish(topic_path, mensaje)
 
-        return ("Mensaje publicado en Pub/Sub", 200)
+        return ("Datos limpiados y enviados a Pub/Sub", 200)
 
     except Exception as e:
         print(f"Error: {e}")
-        return (f"Error al publicar: {str(e)}", 500)
+        return (f"Error al procesar datos: {str(e)}", 500)
 ```
 > [!CAUTION]
 > REEMPLAZAR PROJECT_ID
