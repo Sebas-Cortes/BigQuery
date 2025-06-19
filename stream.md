@@ -245,7 +245,7 @@ gcloud pubsub subscriptions pull ver-mensajes --limit=10 --auto-ack
 	if __name__ == '__main__':
 	    run()
 	```
-	> [!CAUTION]
+	> [!CAUTION]  
 	> Actualizar el project_id al crear
 	
 	Para ejecutar el script ingresamos este comando en **Cloud Storage**.
