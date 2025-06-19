@@ -246,8 +246,8 @@ gcloud pubsub subscriptions pull ver-mensajes --limit=10 --auto-ack
 	    run()
 	```
 	> [!CAUTION]
- 	> 
 	> Actualizar el project_id al crear
+	>
 	
 	Para ejecutar el script ingresamos este comando en **Cloud Storage**.
 	```bash
