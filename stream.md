@@ -23,8 +23,11 @@ gcloud pubsub topics create topic-stream
 > [!NOTE]
 > Para definir la función debemos usar el código a continuación con su **requeriments.txt**
 
-Este código recibe los datos y los sube al tópico **Pub/Sub**.
-
+Este código recibe los datos y los sube al tópico **Pub/Sub**.  
+Para crear este codigo se debe crear localmente en **Cloud Console** con:
+```bash
+nano main.py
+```
 ```python
 import json
 from google.cloud import pubsub_v1
@@ -58,10 +61,20 @@ def recibir_datos(request):
 > REEMPLAZAR PROJECT_ID
 
 **requeriments.txt**
+```bash
+nano requeriments.txt
+```
 ```requeriments
 google-cloud-pubsub
 ```
-Para el despliegue de la función usamos este comando en **Cloud Console**.
+---
+Para el despliegue de la función usamos este comando en **Cloud Console**.  
+
+Permisos para usar **Cloud Function Gen2**:
+```bash
+gcloud services enable run.googleapis.com
+```
+Comando:
 ```bash
 gcloud functions deploy recibir_datos \
   --gen2 \
