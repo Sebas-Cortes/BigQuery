@@ -1,4 +1,5 @@
 
+
 # Proceso de **Big data** para los datos de streaming
 
 Para empezar vamos a recordar la arquitectura que se va a llevar a cabo para este proyecto.
@@ -248,7 +249,8 @@ gcloud pubsub subscriptions pull ver-mensajes --limit=10 --auto-ack
 > [!CAUTION]
 > Actualizar el project_id al crear
 	
-	Para ejecutar el script ingresamos este comando en **Cloud Storage**.
-	```bash
-	python limpiar_pubsub.py
-	```
+Para ejecutar el script ingresamos este comando en **Cloud Storage**.  
+
+```bash
+python limpiar_pubsub.py
+```
