@@ -26,12 +26,15 @@ gcloud pubsub topics create topic-stream
 Este código recibe los datos y los sube al tópico **Pub/Sub**.
 
 ```python
-import base64
 import json
 from google.cloud import pubsub_v1
 
+# Reemplaza esto por tu ID real de proyecto
+PROJECT_ID = "tu-id-de-proyecto"
+TOPIC_ID = "topic-stream"
+
 publisher = pubsub_v1.PublisherClient()
-topic_path = publisher.topic_path("TU_ID_PROYECTO", "datos-endpoint")
+topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
 def recibir_datos(request):
     if request.method != 'POST':
@@ -51,6 +54,9 @@ def recibir_datos(request):
         print(f"Error: {e}")
         return (f"Error al publicar: {str(e)}", 500)
 ```
+> [!CAUTION]
+> REEMPLAZAR PROJECT_ID
+
 **requeriments.txt**
 ```requeriments
 google-cloud-pubsub
@@ -65,7 +71,6 @@ gcloud functions deploy recibir_datos \
   --trigger-http \
   --allow-unauthenticated
 ```
-
 > [!IMPORTANT]
 > Este comando nos devuelve la URL para registrar.
 
