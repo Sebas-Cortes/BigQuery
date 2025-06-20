@@ -210,10 +210,12 @@ gcloud pubsub subscriptions pull ver-mensajes --limit=10 --auto-ack
 	        _ = (
 	            raw_data
 	            | 'Decodificar crudo' >> beam.Map(lambda x: x.decode('utf-8'))
-	            | 'Guardar en bruto' >> beam.io.WriteToText(
-	                file_path_prefix=f'gs://{BUCKET}/raw/mensajes_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}',
-	                file_name_suffix='.jsonl'
-	            )
+	            | 'Ventana de 1 minuto' >> beam.WindowInto(beam.window.FixedWindows(60))
+                | 'Guardar en bruto' >> beam.io.fileio.WriteToFiles(
+                    path=f'gs://{BUCKET}/raw/',
+                    destination=lambda _: 'mensajes',
+                    file_naming=beam.io.fileio.default_file_naming(suffix='.jsonl')
+                )
 	        )
 
 	        # 🧹 Limpiar y validar
