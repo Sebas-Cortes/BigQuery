@@ -1,5 +1,6 @@
 
 
+
 # Proceso de **Big data** para los datos de streaming
 
 Para empezar vamos a recordar la arquitectura que se va a llevar a cabo para este proyecto.
@@ -149,7 +150,7 @@ gcloud pubsub subscriptions pull ver-mensajes --limit=10 --auto-ack
 	except Exception:
 	    PROJECT_ID = 'qwiklabs-gcp-01-a661d525d46b'
 
-	BUCKET = 'bucket-david-stream'
+	BUCKET = f'{PROJECT_ID}-bucket-stream'
 	TOPIC_ID = 'topic-stream'
 	BQ_TABLE = 'streaming.ventas_limpias'  # Dataset.Tabla
 
