@@ -112,7 +112,7 @@ gcloud pubsub subscriptions pull ver-mensajes --limit=10 --auto-ack
 		```
 	* Creamos el bucket con el nombre "bucket-stream":
 		```bash
-		gcloud storage buckets create gs://bucket-stream --location=us-central1
+		gcloud storage buckets create gs://$(gcloud config get-value project)-bucket-stream --location=us-central1
 		```
 * Creamos una suscripción en Pub/Sub para Dataflow.
 	```bash
