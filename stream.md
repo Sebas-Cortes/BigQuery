@@ -51,17 +51,22 @@ def recibir_datos(request):
 
     try:
         data = request.get_json()
+
         if data is None:
             return ("No se recibió JSON válido", 400)
 
-        # Validar y completar con None si falta alguna columna
-        datos_limpios = {col: data.get(col, None) for col in columnas_obligatorias}
+        # Si es un solo objeto, lo convertimos en lista
+        if isinstance(data, dict):
+            data = [data]
+        elif not isinstance(data, list):
+            return ("Formato de datos no válido", 400)
 
-        # Publicar en Pub/Sub
-        mensaje = json.dumps(datos_limpios).encode("utf-8")
-        publisher.publish(topic_path, mensaje)
+        for item in data:
+            datos_limpios = {col: item.get(col, None) for col in columnas_obligatorias}
+            mensaje = json.dumps(datos_limpios).encode("utf-8")
+            publisher.publish(topic_path, mensaje)
 
-        return ("Datos limpiados y enviados a Pub/Sub", 200)
+        return (f"Se publicaron {len(data)} mensajes en Pub/Sub", 200)
 
     except Exception as e:
         print(f"Error: {e}")
