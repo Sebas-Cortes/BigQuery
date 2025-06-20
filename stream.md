@@ -71,7 +71,7 @@ def recibir_datos(request):
 
 **requeriments.txt**
 ```bash
-nano requeriments.txt
+nano requirements.txt
 ```
 ```requeriments
 google-cloud-pubsub
