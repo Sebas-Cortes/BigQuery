@@ -130,8 +130,7 @@ gcloud pubsub subscriptions pull ver-mensajes --limit=10 --auto-ack
   bq mk streaming
 	```
 	```bash
-  bq mk --table \
-  	"$(gcloud config get-value project):streaming.ventas_limpias" \  id_cliente:STRING,cliente:STRING,genero:STRING,id_producto:STRING,producto:STRING,precio:FLOAT,cantidad:INTEGER,monto:FLOAT,forma_pago:STRING,fecreg:TIMESTAMP
+  bq mk --table qwiklabs-gcp-01-67b85d971b86:streaming.ventas_limpias id_cliente:STRING,cliente:STRING,genero:STRING,id_producto:STRING,producto:STRING,precio:FLOAT,cantidad:INTEGER,monto:FLOAT,forma_pago:STRING,fecreg:TIMESTAMP
 	```
 	Verificamos que se creó correctamente:
 	```bash
